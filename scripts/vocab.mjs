@@ -14,8 +14,19 @@ function usableMeanings(form) {
   return form.meanings.filter((m) => !SKIP_MEANING.test(m));
 }
 
+// Readings the heuristic below gets wrong for low levels; checked by hand.
+export const READING_OVERRIDES = {
+  吗: 'ma',
+  雨: 'yǔ',
+  长: 'cháng',
+  着: 'zhe',
+  啊: 'a',
+};
+
 /** Prefer the common-noun reading with the most senses (说 shuō over shuì), skipping surname-only forms. */
 export function pickForm(entry) {
+  const override = entry.forms.find((f) => f.transcriptions.pinyin === READING_OVERRIDES[entry.simplified]);
+  if (override) return override;
   const candidates = entry.forms.filter((f) => !/^[A-ZĀÁǍÀĒÉĚÈĪÍǏÌŌÓǑÒŪÚǓÙ]/.test(f.transcriptions.pinyin));
   const pool = candidates.length > 0 ? candidates : entry.forms;
   return pool.reduce((best, f) => (usableMeanings(f).length > usableMeanings(best).length ? f : best), pool[0]);

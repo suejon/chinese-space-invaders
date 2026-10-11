@@ -15,6 +15,10 @@ describe('pickForm', () => {
     const entry = { forms: [form('shuì', ['to persuade']), form('shuō', ['to speak', 'to say'])] };
     expect(pickForm(entry).transcriptions.pinyin).toBe('shuō');
   });
+  it('uses hand-checked reading overrides', () => {
+    const entry = { simplified: '吗', forms: [form('má', ['(coll.) what?', 'x']), form('ma', ['(question particle)'])] };
+    expect(pickForm(entry).transcriptions.pinyin).toBe('ma');
+  });
   it('skips capitalized (proper noun) readings', () => {
     const entry = { forms: [form('Ān', ['surname An', 'peace']), form('ān', ['peaceful'])] };
     expect(pickForm(entry).transcriptions.pinyin).toBe('ān');
