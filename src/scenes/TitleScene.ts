@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { levelName, loadIndex, loadLevel } from '../data';
-import { CJK_FONT } from '../theme';
+import { levelName, loadIndex } from '../data';
+import { COLORS, textStyle } from '../theme';
 
-/** Placeholder title screen: proves the word data and CJK font load. The game loop comes next. */
+/** Level select. Tap a level, or press 1–7. */
 export class TitleScene extends Phaser.Scene {
   constructor() {
     super('title');
@@ -10,29 +10,35 @@ export class TitleScene extends Phaser.Scene {
 
   async create() {
     const { width } = this.scale;
-    this.add.text(width / 2, 160, 'HSK Invaders', { fontFamily: CJK_FONT, fontSize: '64px', color: '#7cf7ff' }).setOrigin(0.5);
-    this.add.text(width / 2, 240, '汉语水平考试 · 太空侵略者', { fontFamily: CJK_FONT, fontSize: '32px', color: '#ffffff' }).setOrigin(0.5);
+    this.add.text(width / 2, 170, 'HSK Invaders', textStyle(68, COLORS.title)).setOrigin(0.5);
+    this.add.text(width / 2, 250, '汉字 · 太空侵略者', textStyle(34)).setOrigin(0.5);
+    this.add
+      .text(width / 2, 330, 'Shoot the ship whose word matches the meaning.', textStyle(24, COLORS.muted))
+      .setOrigin(0.5);
 
     const levels = await loadIndex();
+    const start = (level: number) => this.scene.start('game', { level });
+
     levels.forEach((info, i) => {
-      this.add
-        .text(width / 2, 360 + i * 56, `${levelName(info.level)}  ·  ${info.count} words`, {
-          fontFamily: CJK_FONT,
-          fontSize: '30px',
-          color: '#c8d0ff',
-        })
-        .setOrigin(0.5);
+      const y = 450 + i * 92;
+      const button = this.add
+        .rectangle(width / 2, y, 440, 72, COLORS.enemy)
+        .setStrokeStyle(2, COLORS.enemyEdge)
+        .setInteractive({ useHandCursor: true });
+      this.add.text(width / 2 - 190, y, levelName(info.level), textStyle(32, COLORS.accent)).setOrigin(0, 0.5);
+      this.add.text(width / 2 + 190, y, `${info.count} words`, textStyle(24, COLORS.muted)).setOrigin(1, 0.5);
+      button.on('pointerover', () => button.setFillStyle(0x3a4290));
+      button.on('pointerout', () => button.setFillStyle(COLORS.enemy));
+      button.on('pointerdown', () => start(info.level));
     });
 
-    const sample = (await loadLevel(1)).slice(0, 6);
-    sample.forEach((word, i) => {
-      this.add
-        .text(width / 2, 820 + i * 64, `${word.hanzi}  ${word.pinyin}  ${word.gloss}`, {
-          fontFamily: CJK_FONT,
-          fontSize: '30px',
-          color: '#ffe27a',
-        })
-        .setOrigin(0.5);
+    this.add
+      .text(width / 2, 450 + levels.length * 92 + 30, 'Press 1–7 or tap a level to start', textStyle(22, COLORS.muted))
+      .setOrigin(0.5);
+
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
+      const level = Number(event.key);
+      if (levels.some((l) => l.level === level)) start(level);
     });
   }
 }

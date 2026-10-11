@@ -2,6 +2,13 @@
 
 A Space Invaders style roguelike for learning Chinese, covering every HSK 3.0 level with gradual progression.
 
+## How to play
+
+Pick a level. Ships carrying Chinese words descend; the panel at the bottom shows an English meaning. Shoot the ship whose word matches it. Only the front ship in each column can be hit, and only one shot can be in the air at a time. A wrong hit costs a shield and highlights the right answer. Clear 5 waves to win; lose all 3 shields or let the ships reach the red line and the run ends. The results screen lists the words you missed.
+
+- Keyboard: ←/→ or A/D to move, Space to fire, M to mute, Esc to quit.
+- Touch or mouse: tap a ship to fly under it and fire; tap elsewhere to move.
+
 ## Develop
 
 ```sh
