@@ -1,0 +1,22 @@
+{
+  "name": "chinese-space-invaders",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run scripts src",
+    "build:data": "node scripts/build-data.mjs"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0",
+    "playwright": "1.56"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  }
+}
