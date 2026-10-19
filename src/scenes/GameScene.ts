@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
-import { levelName, loadLevel, type Word } from '../data';
-import { RunState, WAVE_SIZES } from '../game/run';
+import { levelName, loadHanzi, loadLevel, type Word } from '../data';
+import { describeParts, type HanziData } from '../game/parts';
+import { progress } from '../game/progress';
+import { shuffle } from '../game/random';
+import { PATROL_MAX, patrolWaves, RunState } from '../game/run';
+import { pickToneWave, sandhiNote, toneLabel, toneless, tonePair } from '../game/tones';
 import { pickWave } from '../game/wave';
 import { isMuted, speak, toggleMute } from '../speech';
 import { COLORS, textStyle } from '../theme';
@@ -17,6 +21,17 @@ const DANGER_Y = 900;
 const PLAYER_Y = 1170;
 const PLAYER_SPEED = 520;
 const BULLET_SPEED = 1100;
+/** After a wrong hit the formation holds still this long, so the player can take in the right answer. */
+const FEEDBACK_PAUSE = 1200;
+const INFO_DURATION = 2800;
+/** Tone waves use fewer ships than meaning waves: telling 8 patterns apart is plenty for a new skill. */
+const TONE_SHIPS = 8;
+
+// Typing the pinyin needs a physical keyboard; touch-only players keep shooting mature words instead.
+let keyboardSeen = false;
+window.addEventListener('keydown', () => (keyboardSeen = true), { once: true });
+
+export type GameStart = { level: number } | { patrol: true };
 
 interface Enemy {
   word: Word;
@@ -25,10 +40,16 @@ interface Enemy {
   frame: Phaser.GameObjects.Rectangle;
 }
 
-/** One run: waves of word-carrying ships; shoot the ship that matches the English prompt. */
+/**
+ * One run: waves of word-carrying ships; shoot the ship that matches the English prompt.
+ * Mature words are answered by typing their pinyin instead, and one wave per level run drills tone pairs.
+ */
 export class GameScene extends Phaser.Scene {
   private run!: RunState;
   private pool: Word[] = [];
+  /** HSK level of each word in the pool, for recording progress (a patrol mixes levels). */
+  private levelOf = new Map<string, number>();
+  private hanzi: HanziData | null = null;
   private enemies: Enemy[] = [];
   private waveTotal = 0;
   private formation!: Phaser.GameObjects.Container;
@@ -40,8 +61,20 @@ export class GameScene extends Phaser.Scene {
   /** Ship the player tapped: the cannon tracks it and fires once underneath. */
   private fireAt: Enemy | null = null;
   private active = false;
+  /** This wave's ships carry tone patterns and the prompt is a two-syllable word. */
+  private toneWave = false;
+  /** The current prompt was already answered wrong once, so a later right answer isn't recorded. */
+  private promptMissed = false;
+  /** The current prompt is for a mature word: type its pinyin to lock on and fire. */
+  private recall = false;
+  private typed = '';
+  private frozenUntil = 0;
+  private infoTimer: Phaser.Time.TimerEvent | null = null;
 
+  private promptHeader!: Phaser.GameObjects.Text;
   private promptText!: Phaser.GameObjects.Text;
+  private subText!: Phaser.GameObjects.Text;
+  private infoText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
   private waveText!: Phaser.GameObjects.Text;
   private shieldText!: Phaser.GameObjects.Text;
@@ -58,15 +91,24 @@ export class GameScene extends Phaser.Scene {
     super('game');
   }
 
-  init(data: { level: number }) {
-    this.run = new RunState(data.level ?? 1);
+  init(data: GameStart) {
+    // A patrol's waves depend on how many words are due, so its run is replaced once they are loaded.
+    this.run = 'level' in data ? new RunState(data.level) : new RunState(0, 'patrol', []);
+    this.pool = [];
+    this.levelOf = new Map();
     this.enemies = [];
     this.bullet = null;
     this.target = null;
     this.moveTo = null;
     this.fireAt = null;
     this.active = false;
+    this.toneWave = false;
     this.direction = 1;
+    this.promptMissed = false;
+    this.recall = false;
+    this.typed = '';
+    this.frozenUntil = 0;
+    this.infoTimer = null;
   }
 
   async create() {
@@ -77,9 +119,20 @@ export class GameScene extends Phaser.Scene {
     this.shieldText = this.add.text(width - 24, 30, '', textStyle(28, COLORS.title)).setOrigin(1, 0);
 
     this.add.line(0, 0, 0, DANGER_Y, width, DANGER_Y, 0xff6b7a, 0.35).setOrigin(0);
-    this.add.rectangle(width / 2, 1035, width - 40, 120, 0x111633).setStrokeStyle(2, 0x2b3170);
-    this.add.text(width / 2, 990, 'SHOOT THE WORD FOR', textStyle(20, COLORS.muted)).setOrigin(0.5);
-    this.promptText = this.add.text(width / 2, 1045, '', textStyle(44, COLORS.accent)).setOrigin(0.5);
+    this.add
+      .rectangle(width / 2, 1035, width - 40, 120, 0x111633)
+      .setStrokeStyle(2, 0x2b3170)
+      .setInteractive()
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+        // Tap the prompt to hear a tone-pair word again.
+        if (!this.toneWave || !this.target) return;
+        e.stopPropagation();
+        speak(this.target.word.hanzi);
+      });
+    this.promptHeader = this.add.text(width / 2, 990, '', textStyle(20, COLORS.muted)).setOrigin(0.5);
+    this.promptText = this.add.text(width / 2, 1035, '', textStyle(44, COLORS.accent)).setOrigin(0.5);
+    this.subText = this.add.text(width / 2, 1078, '', textStyle(24, COLORS.title)).setOrigin(0.5);
+    this.infoText = this.add.text(width / 2, 1118, '', textStyle(22, COLORS.text)).setOrigin(0.5);
 
     this.player = this.add.triangle(width / 2, PLAYER_Y, 0, 50, 34, 0, 68, 50, COLORS.player);
 
@@ -91,7 +144,8 @@ export class GameScene extends Phaser.Scene {
         e.stopPropagation();
         this.toggleSound();
       });
-    this.add.text(24, 1250, levelName(this.run.level), textStyle(22, COLORS.muted)).setOrigin(0, 1);
+    const label = this.run.kind === 'patrol' ? 'Daily patrol' : levelName(this.run.level);
+    this.add.text(24, 1250, label, textStyle(22, COLORS.muted)).setOrigin(0, 1);
 
     const keyboard = this.input.keyboard!;
     const K = Phaser.Input.Keyboard.KeyCodes;
@@ -102,7 +156,8 @@ export class GameScene extends Phaser.Scene {
       d: keyboard.addKey(K.D),
       fire: keyboard.addKey(K.SPACE),
     };
-    keyboard.on('keydown-M', () => this.toggleSound());
+    keyboard.on('keydown-M', () => !this.recall && this.toggleSound());
+    keyboard.on('keydown', (event: KeyboardEvent) => this.onType(event));
     keyboard.on('keydown-ESC', () => this.scene.start('title'));
 
     // Touch / mouse: tap a ship to fly under it and fire; tap empty space to move there.
@@ -111,9 +166,35 @@ export class GameScene extends Phaser.Scene {
       this.fireAt = null;
     });
 
-    this.updateHud();
-    this.pool = await loadLevel(this.run.level);
+    this.hanzi = await loadHanzi().catch(() => null);
+    if (this.run.kind === 'patrol') {
+      await this.loadPatrol();
+      if (this.pool.length === 0) {
+        this.add.text(width / 2, 560, 'Nothing due. Come back tomorrow!', textStyle(36, COLORS.title)).setOrigin(0.5);
+        this.time.delayedCall(1800, () => this.scene.start('title'));
+        return;
+      }
+    } else {
+      this.pool = await loadLevel(this.run.level);
+      for (const word of this.pool) this.levelOf.set(word.hanzi, this.run.level);
+    }
     this.startWave();
+  }
+
+  /** Due words across all levels, padded with already-seen words when only a few are due. */
+  private async loadPatrol() {
+    let picks = progress.due().slice(0, PATROL_MAX);
+    if (picks.length < 4) picks = [...picks, ...shuffle(progress.notDue(), Math.random).slice(0, 4 - picks.length)];
+    const levels = [...new Set(picks.map((p) => p.level))];
+    const words = new Map<string, Word>();
+    for (const level of levels) for (const word of await loadLevel(level)) words.set(`${level}:${word.hanzi}`, word);
+    for (const pick of picks) {
+      const word = words.get(`${pick.level}:${pick.hanzi}`);
+      if (!word) continue;
+      this.pool.push(word);
+      this.levelOf.set(word.hanzi, pick.level);
+    }
+    this.run = new RunState(0, 'patrol', patrolWaves(this.pool.length));
   }
 
   private toggleSound() {
@@ -131,13 +212,22 @@ export class GameScene extends Phaser.Scene {
   private startWave() {
     this.updateHud();
     const { width } = this.scale;
-    const banner = this.add.text(width / 2, 560, `Wave ${this.run.wave + 1}`, textStyle(64, COLORS.title)).setOrigin(0.5);
-    this.promptText.setText('');
+    this.setPrompt('', '', '');
+    this.infoText.setText('');
 
-    const seen = new Set(this.run.results.keys());
-    const unseen = this.pool.filter((w) => !seen.has(w.hanzi));
-    const words = pickWave(this.pool, WAVE_SIZES[this.run.wave], Math.random, unseen);
+    const size = this.run.waveSizes[this.run.wave];
+    let words = this.run.isToneWave ? pickToneWave(this.pool, Math.min(size, TONE_SHIPS), Math.random) : [];
+    if (words.length < 4) {
+      // Not enough two-syllable words for a tone wave: fall back to a meaning wave.
+      const seen = new Set(this.run.results.keys());
+      const unseen = this.pool.filter((w) => !seen.has(w.hanzi));
+      words = pickWave(this.pool, size, Math.random, unseen);
+    }
+    const tones = this.run.isToneWave && words.every((w) => tonePair(w));
+    this.toneWave = tones;
+    const bannerText = tones ? 'Tone pairs' : `Wave ${this.run.wave + 1}`;
 
+    const banner = this.add.text(width / 2, 560, bannerText, textStyle(64, COLORS.title)).setOrigin(0.5);
     this.formation?.destroy();
     this.formation = this.add.container(0, FORMATION_TOP);
     const rows = Math.ceil(words.length / COLS);
@@ -146,14 +236,16 @@ export class GameScene extends Phaser.Scene {
       const x = left + (i % COLS) * SPACING_X;
       const y = Math.floor(i / COLS) * SPACING_Y;
       const frame = this.add.rectangle(0, 0, ENEMY_W, ENEMY_H, COLORS.enemy).setStrokeStyle(2, COLORS.enemyEdge);
-      const size = word.hanzi.length <= 2 ? 44 : word.hanzi.length === 3 ? 36 : 28;
-      const label = this.add.text(0, 0, word.hanzi, textStyle(size)).setOrigin(0.5);
+      const text = tones ? toneLabel(tonePair(word)!) : word.hanzi;
+      const size = tones ? 30 : word.hanzi.length <= 2 ? 44 : word.hanzi.length === 3 ? 36 : 28;
+      const label = this.add.text(0, 0, text, { ...textStyle(size), align: 'center', lineSpacing: -4 }).setOrigin(0.5);
       const container = this.add.container(x, y, [frame, label]);
       container.setSize(ENEMY_W, ENEMY_H).setInteractive({ useHandCursor: true });
       const enemy: Enemy = { word, column: i % COLS, container, frame };
       container.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
         e.stopPropagation();
-        this.fireAt = enemy;
+        // A typed prompt can't be answered by tapping a ship.
+        if (!this.recall) this.fireAt = enemy;
       });
       this.formation.add(container);
       return enemy;
@@ -194,7 +286,63 @@ export class GameScene extends Phaser.Scene {
     const fresh = exposed.filter((e) => e !== this.target);
     const choices = fresh.length > 0 ? fresh : exposed;
     this.target = choices[Math.floor(Math.random() * choices.length)] ?? null;
-    this.promptText.setText(this.target ? this.target.word.gloss : '');
+    this.promptMissed = false;
+    this.typed = '';
+    const word = this.target?.word;
+    this.recall = false;
+    if (!word) this.setPrompt('', '', '');
+    else if (this.toneWave) {
+      this.setPrompt('SHOOT THE TONES OF', word.hanzi, word.gloss);
+      // Wait for the last hit word's audio to finish before saying the new one.
+      this.time.delayedCall(900, () => this.target?.word === word && speak(word.hanzi));
+    } else if (keyboardSeen && progress.isMature(word.hanzi)) {
+      // Well-known words move from recognition (shooting) to recall (typing the pinyin).
+      this.recall = true;
+      this.setPrompt('TYPE THE PINYIN FOR', word.gloss, '›  _');
+    } else {
+      this.setPrompt('SHOOT THE WORD FOR', word.gloss, '');
+    }
+  }
+
+  private setPrompt(header: string, prompt: string, sub: string) {
+    this.promptHeader.setText(header);
+    this.promptText.setText(prompt);
+    this.subText.setText(sub).setColor(COLORS.title);
+  }
+
+  /** Typing for recall prompts: letters build the pinyin; a full match locks on to that ship and fires. */
+  private onType(event: KeyboardEvent) {
+    if (!this.recall || !this.active || this.fireAt) return;
+    if (event.key === 'Backspace') this.typed = this.typed.slice(0, -1);
+    else if (event.key === 'Enter') return this.lockOn(true);
+    else if (/^[a-zü]$/i.test(event.key)) this.typed += event.key.toLowerCase();
+    else return;
+    this.subText.setText(`›  ${this.typed}_`).setColor(COLORS.title);
+    this.lockOn(false);
+  }
+
+  /**
+   * Fire at the exposed ship whose pinyin was typed (tones optional). Locks on as soon as the
+   * letters match one ship and can't be the start of another; Enter forces it.
+   */
+  private lockOn(submit: boolean) {
+    const typed = toneless(this.typed);
+    if (!typed) return;
+    const exposed = this.exposed();
+    const matches = exposed.filter((e) => toneless(e.word.pinyin) === typed);
+    const match = matches.find((e) => e === this.target) ?? matches[0];
+    const longer = exposed.some((e) => {
+      const pinyin = toneless(e.word.pinyin);
+      return pinyin !== typed && pinyin.startsWith(typed);
+    });
+    if (match && (submit || !longer)) {
+      this.fireAt = match;
+      this.subText.setText(`›  ${this.typed}`).setColor(COLORS.good);
+      this.typed = '';
+    } else if (submit) {
+      this.subText.setText(`›  ${this.typed}  ✗`).setColor(COLORS.bad);
+      this.typed = '';
+    }
   }
 
   update(_time: number, deltaMs: number) {
@@ -207,8 +355,9 @@ export class GameScene extends Phaser.Scene {
 
   private updatePlayer(dt: number) {
     const { width } = this.scale;
-    const leftDown = this.keys.left.isDown || this.keys.a.isDown;
-    const rightDown = this.keys.right.isDown || this.keys.d.isDown;
+    // While typing pinyin, A and D are letters, not movement.
+    const leftDown = this.keys.left.isDown || (!this.recall && this.keys.a.isDown);
+    const rightDown = this.keys.right.isDown || (!this.recall && this.keys.d.isDown);
     if (this.fireAt && !this.enemies.includes(this.fireAt)) this.fireAt = null;
     if (this.fireAt) this.moveTo = this.formation.x + this.fireAt.container.x;
     if (leftDown || rightDown) {
@@ -228,7 +377,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.player.x = Phaser.Math.Clamp(this.player.x, 40, width - 40);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.fire)) this.fire();
+    if (Phaser.Input.Keyboard.JustDown(this.keys.fire) && !this.recall) this.fire();
   }
 
   /** One bullet on screen at a time, as in the original: guessing has a cost. */
@@ -263,10 +412,20 @@ export class GameScene extends Phaser.Scene {
     const x = this.formation.x + enemy.container.x;
     const y = this.formation.y + enemy.container.y;
 
+    const tones = this.toneWave;
     if (enemy === target) {
-      const points = this.run.hit(enemy.word);
-      speak(enemy.word.hanzi);
-      this.floatText(x, y, `${enemy.word.hanzi} ${enemy.word.pinyin}  +${points}`, COLORS.good);
+      const word = enemy.word;
+      const points = this.run.hit(word);
+      speak(word.hanzi);
+      this.floatText(x, y, `${word.hanzi} ${word.pinyin}  +${points}`, COLORS.good);
+      if (tones) {
+        const note = sandhiNote(tonePair(word)!);
+        if (note) this.showInfo(`${word.hanzi}: ${note}`);
+      } else {
+        // First time ever: show how the characters are built, now that the word is on screen.
+        if (progress.isNew(word.hanzi)) this.showParts(word);
+        if (!this.promptMissed) this.record(word, true);
+      }
       this.explode(x, y);
       enemy.container.destroy();
       this.enemies = this.enemies.filter((e) => e !== enemy);
@@ -283,20 +442,46 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.run.miss(target.word, enemy.word);
+    if (!tones && !this.promptMissed) this.record(target.word, false);
+    this.promptMissed = true;
     this.updateHud();
     this.cameras.main.shake(180, 0.008);
-    this.floatText(x, y, `${enemy.word.hanzi} = ${enemy.word.gloss}`, COLORS.bad);
+    this.floatText(x, y, tones ? `${enemy.word.hanzi} ${enemy.word.pinyin}` : `${enemy.word.hanzi} = ${enemy.word.gloss}`, COLORS.bad);
     this.flash(enemy.frame, 0xff6b7a);
-    // Show the right answer so the miss teaches something; the prompt stays the same.
-    this.flash(target.frame, 0xffe27a, 1200);
+    // Teach the right answer so a wrong pick isn't what sticks: highlight it, say it, show its
+    // pinyin and how it is built, and hold the formation still for a moment. The prompt stays the same.
+    const tx = this.formation.x + target.container.x;
+    const ty = this.formation.y + target.container.y;
+    this.flash(target.frame, 0xffe27a, FEEDBACK_PAUSE);
+    this.floatText(tx, ty + 40, `${target.word.hanzi} ${target.word.pinyin}`, COLORS.accent);
+    speak(target.word.hanzi);
+    if (tones) this.showInfo(`${target.word.hanzi} ${target.word.pinyin}  ${sandhiNote(tonePair(target.word)!) ?? ''}`);
+    else this.showParts(target.word);
+    this.frozenUntil = this.time.now + FEEDBACK_PAUSE;
+    if (this.recall) this.subText.setText('›  _').setColor(COLORS.title);
     if (this.run.isOver) this.endRun();
   }
 
+  private record(word: Word, correct: boolean) {
+    progress.review(word.hanzi, this.levelOf.get(word.hanzi) ?? this.run.level, { correct, recall: this.recall });
+  }
+
+  private showParts(word: Word) {
+    if (this.hanzi) this.showInfo(describeParts(word, this.hanzi));
+  }
+
+  private showInfo(text: string) {
+    if (!text.trim()) return;
+    this.infoText.setText(text.trim());
+    this.infoTimer?.remove();
+    this.infoTimer = this.time.delayedCall(INFO_DURATION, () => this.infoText.setText(''));
+  }
+
   private updateFormation(dt: number) {
-    if (this.enemies.length === 0) return;
+    if (this.enemies.length === 0 || this.time.now < this.frozenUntil) return;
     const { width } = this.scale;
-    const progress = 1 - this.enemies.length / this.waveTotal;
-    const speed = (30 + 10 * this.run.wave) * (1 + progress * 0.8);
+    const cleared = 1 - this.enemies.length / this.waveTotal;
+    const speed = (30 + 10 * this.run.wave) * (1 + cleared * 0.8);
     this.formation.x += this.direction * speed * dt;
 
     const xs = this.enemies.map((e) => this.formation.x + e.container.x);

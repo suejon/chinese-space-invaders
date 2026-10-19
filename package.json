@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run scripts src",
-    "build:data": "node scripts/build-data.mjs"
+    "build:data": "node scripts/build-data.mjs",
+    "build:hanzi": "node scripts/build-hanzi.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0",

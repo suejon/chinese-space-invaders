@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { levelName } from '../data';
 import type { RunState } from '../game/run';
+import type { GameStart } from './GameScene';
 import { COLORS, textStyle } from '../theme';
 
 const MAX_LISTED = 8;
@@ -15,9 +16,10 @@ export class ResultsScene extends Phaser.Scene {
     const { run } = data;
     const { width } = this.scale;
 
-    const heading = run.isWon ? 'Sector cleared!' : run.invaded ? 'Invaded!' : 'Shields down';
+    const patrol = run.kind === 'patrol';
+    const heading = run.isWon ? (patrol ? 'Patrol complete!' : 'Sector cleared!') : run.invaded ? 'Invaded!' : 'Shields down';
     this.add.text(width / 2, 140, heading, textStyle(60, run.isWon ? COLORS.good : COLORS.bad)).setOrigin(0.5);
-    this.add.text(width / 2, 210, levelName(run.level), textStyle(28, COLORS.muted)).setOrigin(0.5);
+    this.add.text(width / 2, 210, patrol ? 'Daily patrol' : levelName(run.level), textStyle(28, COLORS.muted)).setOrigin(0.5);
 
     const stats = [
       ['Score', `${run.score}`],
@@ -42,7 +44,8 @@ export class ResultsScene extends Phaser.Scene {
       this.add.text(260, y + 16, word.gloss, textStyle(22, COLORS.muted)).setOrigin(0, 0.5);
     });
 
-    const replay = () => this.scene.start('game', { level: run.level });
+    const again: GameStart = patrol ? { patrol: true } : { level: run.level };
+    const replay = () => this.scene.start('game', again);
     const levels = () => this.scene.start('title');
     this.button(width / 2 - 150, 1150, 'Play again', replay);
     this.button(width / 2 + 150, 1150, 'Levels', levels);

@@ -7,7 +7,23 @@ export interface WordResult {
 }
 
 export const WAVE_SIZES = [8, 8, 12, 12, 12];
+/** In a level run, this wave drills two-syllable tone pairs instead of meanings. */
+export const TONE_WAVE = 2;
 export const STARTING_SHIELDS = 3;
+/** A daily patrol reviews at most this many due words, so it stays a few minutes long. */
+export const PATROL_MAX = 36;
+
+/** Wave sizes for a patrol of `count` words: waves of up to 12, none smaller than 4. */
+export function patrolWaves(count: number): number[] {
+  const words = Math.min(count, PATROL_MAX);
+  if (words === 0) return [];
+  const waves = Math.ceil(words / 12);
+  const base = Math.floor(words / waves);
+  return Array.from({ length: waves }, (_, i) => base + (i < words % waves ? 1 : 0));
+}
+
+/** A run is either a sector of one HSK level or a daily patrol of due reviews across levels. */
+export type RunKind = 'level' | 'patrol';
 
 /** Score, shields and per-word outcomes for one run. Kept free of Phaser so it can be unit-tested. */
 export class RunState {
@@ -18,10 +34,19 @@ export class RunState {
   invaded = false;
   readonly results = new Map<string, WordResult>();
 
-  constructor(readonly level: number) {}
+  constructor(
+    readonly level: number,
+    readonly kind: RunKind = 'level',
+    readonly waveSizes: readonly number[] = WAVE_SIZES,
+  ) {}
 
   get waveCount() {
-    return WAVE_SIZES.length;
+    return this.waveSizes.length;
+  }
+
+  /** True when the current wave drills tone pairs. */
+  get isToneWave() {
+    return this.kind === 'level' && this.wave === TONE_WAVE;
   }
 
   get isOver() {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Word } from '../data';
-import { RunState, STARTING_SHIELDS } from './run';
+import { patrolWaves, RunState, STARTING_SHIELDS, TONE_WAVE } from './run';
 
 const word = (hanzi: string): Word => ({ hanzi, trad: hanzi, pinyin: '', gloss: hanzi, meanings: [], pos: [], freq: 0 });
 
@@ -34,5 +34,25 @@ describe('RunState', () => {
     const run = new RunState(1);
     run.wave = run.waveCount;
     expect(run.isWon).toBe(true);
+  });
+});
+
+describe('patrolWaves', () => {
+  it('splits due words into waves of 4 to 12', () => {
+    expect(patrolWaves(0)).toEqual([]);
+    expect(patrolWaves(4)).toEqual([4]);
+    expect(patrolWaves(13)).toEqual([7, 6]);
+    expect(patrolWaves(100)).toEqual([12, 12, 12]);
+  });
+});
+
+describe('tone waves', () => {
+  it('only appear in level runs', () => {
+    const run = new RunState(1);
+    run.wave = TONE_WAVE;
+    expect(run.isToneWave).toBe(true);
+    const patrol = new RunState(0, 'patrol', [8, 8, 8]);
+    patrol.wave = TONE_WAVE;
+    expect(patrol.isToneWave).toBe(false);
   });
 });
