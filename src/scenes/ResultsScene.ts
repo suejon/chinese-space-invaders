@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { levelName } from '../data';
 import type { RunState } from '../game/run';
 import type { GameStart } from './GameScene';
-import { COLORS, textStyle } from '../theme';
+import { COLORS, KEYPAD_HEIGHT, TOUCH, textStyle } from '../theme';
 
 const MAX_LISTED = 8;
 
@@ -15,6 +15,8 @@ export class ResultsScene extends Phaser.Scene {
   create(data: { run: RunState }) {
     const { run } = data;
     const { width } = this.scale;
+    // Touch screens are taller than the layout: keep it centred.
+    this.cameras.main.setScroll(0, -KEYPAD_HEIGHT / 2);
 
     const patrol = run.kind === 'patrol';
     const heading = run.isWon ? (patrol ? 'Patrol complete!' : 'Sector cleared!') : run.invaded ? 'Invaded!' : 'Shields down';
@@ -49,7 +51,7 @@ export class ResultsScene extends Phaser.Scene {
     const levels = () => this.scene.start('title');
     this.button(width / 2 - 150, 1150, 'Play again', replay);
     this.button(width / 2 + 150, 1150, 'Levels', levels);
-    this.add.text(width / 2, 1225, 'Space to play again · Esc for levels', textStyle(20, COLORS.muted)).setOrigin(0.5);
+    if (!TOUCH) this.add.text(width / 2, 1225, 'Space to play again · Esc for levels', textStyle(20, COLORS.muted)).setOrigin(0.5);
 
     const keyboard = this.input.keyboard!;
     keyboard.once('keydown-SPACE', replay);

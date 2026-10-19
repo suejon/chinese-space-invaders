@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { levelName, loadIndex } from '../data';
 import { progress } from '../game/progress';
-import { COLORS, textStyle } from '../theme';
+import { COLORS, KEYPAD_HEIGHT, TOUCH, textStyle } from '../theme';
 
 /** Level select. Tap a level, or press 1–7. P starts the daily patrol of due reviews. */
 export class TitleScene extends Phaser.Scene {
@@ -11,6 +11,8 @@ export class TitleScene extends Phaser.Scene {
 
   async create() {
     const { width } = this.scale;
+    // Touch screens are taller than the layout: keep it centred.
+    this.cameras.main.setScroll(0, -KEYPAD_HEIGHT / 2);
     this.add.text(width / 2, 170, 'HSK Invaders', textStyle(68, COLORS.title)).setOrigin(0.5);
     this.add.text(width / 2, 250, '汉字 · 太空侵略者', textStyle(34)).setOrigin(0.5);
     this.add
@@ -34,7 +36,7 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.add
-      .text(width / 2, 450 + levels.length * 92 + 30, 'Press 1–7 or tap a level to start', textStyle(22, COLORS.muted))
+      .text(width / 2, 450 + levels.length * 92 + 30, TOUCH ? 'Tap a level to start' : 'Press 1–7 or tap a level to start', textStyle(22, COLORS.muted))
       .setOrigin(0.5);
 
     // Daily patrol: a short run of only the words due for review, across all levels.
@@ -46,7 +48,7 @@ export class TitleScene extends Phaser.Scene {
       .setStrokeStyle(2, due > 0 ? COLORS.accentEdge : COLORS.enemy);
     this.add.text(width / 2 - 190, y, 'Daily patrol', textStyle(32, due > 0 ? COLORS.good : COLORS.muted)).setOrigin(0, 0.5);
     this.add
-      .text(width / 2 + 190, y, due > 0 ? `${due} due (P)` : 'nothing due', textStyle(24, COLORS.muted))
+      .text(width / 2 + 190, y, due > 0 ? `${due} due${TOUCH ? '' : ' (P)'}` : 'nothing due', textStyle(24, COLORS.muted))
       .setOrigin(1, 0.5);
     if (due > 0) {
       button.setInteractive({ useHandCursor: true }).on('pointerdown', patrol);
