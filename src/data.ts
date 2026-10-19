@@ -1,3 +1,5 @@
+import type { HanziData } from './game/parts';
+
 export interface Word {
   hanzi: string;
   trad: string;
@@ -27,4 +29,12 @@ export async function loadIndex(): Promise<LevelInfo[]> {
 export async function loadLevel(level: number): Promise<Word[]> {
   const res = await fetch(url(`${level}.json`));
   return res.json();
+}
+
+let hanzi: Promise<HanziData> | undefined;
+
+/** Character components (public/data/hanzi.json), loaded once. */
+export function loadHanzi(): Promise<HanziData> {
+  hanzi ??= fetch(`${import.meta.env.BASE_URL}data/hanzi.json`).then((res) => res.json());
+  return hanzi;
 }

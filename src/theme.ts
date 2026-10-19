@@ -10,6 +10,7 @@ export const COLORS = {
   bad: '#ff6b7a',
   enemy: 0x2b3170,
   enemyEdge: 0x7cf7ff,
+  accentEdge: 0x6dff9c,
   player: 0x7cf7ff,
   bullet: 0xffe27a,
 };

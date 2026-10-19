@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { levelName, loadIndex } from '../data';
+import { progress } from '../game/progress';
 import { COLORS, textStyle } from '../theme';
 
-/** Level select. Tap a level, or press 1–7. */
+/** Level select. Tap a level, or press 1–7. P starts the daily patrol of due reviews. */
 export class TitleScene extends Phaser.Scene {
   constructor() {
     super('title');
@@ -36,9 +37,27 @@ export class TitleScene extends Phaser.Scene {
       .text(width / 2, 450 + levels.length * 92 + 30, 'Press 1–7 or tap a level to start', textStyle(22, COLORS.muted))
       .setOrigin(0.5);
 
+    // Daily patrol: a short run of only the words due for review, across all levels.
+    const due = progress.due().length;
+    const patrol = () => due > 0 && this.scene.start('game', { patrol: true });
+    const y = 450 + levels.length * 92 + 110;
+    const button = this.add
+      .rectangle(width / 2, y, 440, 72, due > 0 ? COLORS.enemy : 0x15183a)
+      .setStrokeStyle(2, due > 0 ? COLORS.accentEdge : COLORS.enemy);
+    this.add.text(width / 2 - 190, y, 'Daily patrol', textStyle(32, due > 0 ? COLORS.good : COLORS.muted)).setOrigin(0, 0.5);
+    this.add
+      .text(width / 2 + 190, y, due > 0 ? `${due} due (P)` : 'nothing due', textStyle(24, COLORS.muted))
+      .setOrigin(1, 0.5);
+    if (due > 0) {
+      button.setInteractive({ useHandCursor: true }).on('pointerdown', patrol);
+      button.on('pointerover', () => button.setFillStyle(0x3a4290));
+      button.on('pointerout', () => button.setFillStyle(COLORS.enemy));
+    }
+
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
       const level = Number(event.key);
       if (levels.some((l) => l.level === level)) start(level);
+      if (event.key.toLowerCase() === 'p') patrol();
     });
   }
 }
