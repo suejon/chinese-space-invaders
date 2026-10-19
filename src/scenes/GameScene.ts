@@ -7,7 +7,7 @@ import { PATROL_MAX, patrolWaves, RunState } from '../game/run';
 import { pickToneWave, sandhiNote, toneLabel, toneless, tonePair } from '../game/tones';
 import { pickWave } from '../game/wave';
 import { isMuted, speak, toggleMute } from '../speech';
-import { COLORS, textStyle } from '../theme';
+import { COLORS, KEYPAD_HEIGHT, PLAY_HEIGHT, TOUCH, textStyle } from '../theme';
 
 const COLS = 4;
 const ENEMY_W = 136;
@@ -26,8 +26,16 @@ const FEEDBACK_PAUSE = 1200;
 const INFO_DURATION = 2800;
 /** Tone waves use fewer ships than meaning waves: telling 8 patterns apart is plenty for a new skill. */
 const TONE_SHIPS = 8;
+/** On-screen keys for typing pinyin on touch screens. V stands in for ü, as on a pinyin keyboard. */
+const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+const KEY_W = 66;
+const KEY_H = 74;
+const KEY_GAP = 6;
+/** Backspace and Enter sit either side of the bottom row of letters. */
+const WIDE_KEY_W = 1.5 * KEY_W + KEY_GAP / 2;
 
-// Typing the pinyin needs a physical keyboard; touch-only players keep shooting mature words instead.
+// Typing the pinyin needs a keyboard: a physical one, or the on-screen keys on touch screens.
+// Mouse-only players keep shooting mature words instead.
 let keyboardSeen = false;
 window.addEventListener('keydown', () => (keyboardSeen = true), { once: true });
 
@@ -79,6 +87,9 @@ export class GameScene extends Phaser.Scene {
   private waveText!: Phaser.GameObjects.Text;
   private shieldText!: Phaser.GameObjects.Text;
   private muteText!: Phaser.GameObjects.Text;
+  /** On-screen keys, shown on touch screens while a prompt asks for pinyin. */
+  private keypad: Phaser.GameObjects.Container | null = null;
+  private touchHint: Phaser.GameObjects.Text | null = null;
   private keys!: {
     left: Phaser.Input.Keyboard.Key;
     right: Phaser.Input.Keyboard.Key;
@@ -106,6 +117,8 @@ export class GameScene extends Phaser.Scene {
     this.direction = 1;
     this.promptMissed = false;
     this.recall = false;
+    this.keypad = null;
+    this.touchHint = null;
     this.typed = '';
     this.frozenUntil = 0;
     this.infoTimer = null;
@@ -136,16 +149,27 @@ export class GameScene extends Phaser.Scene {
 
     this.player = this.add.triangle(width / 2, PLAYER_Y, 0, 50, 34, 0, 68, 50, COLORS.player);
 
+    // Padding gives the small HUD buttons a hit area a thumb can find.
+    const buttonStyle = { ...textStyle(22, COLORS.muted), padding: { x: 16, y: 18 } };
     this.muteText = this.add
-      .text(width - 24, 1250, '', textStyle(22, COLORS.muted))
+      .text(width - 8, 1268, '', buttonStyle)
       .setOrigin(1, 1)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
         e.stopPropagation();
         this.toggleSound();
       });
+    this.add
+      .text(width / 2, 1268, TOUCH ? '✕ Quit' : '✕ Quit (Esc)', buttonStyle)
+      .setOrigin(0.5, 1)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+        e.stopPropagation();
+        this.scene.start('title');
+      });
     const label = this.run.kind === 'patrol' ? 'Daily patrol' : levelName(this.run.level);
     this.add.text(24, 1250, label, textStyle(22, COLORS.muted)).setOrigin(0, 1);
+    if (TOUCH) this.createKeypad();
 
     const keyboard = this.input.keyboard!;
     const K = Phaser.Input.Keyboard.KeyCodes;
@@ -160,10 +184,15 @@ export class GameScene extends Phaser.Scene {
     keyboard.on('keydown', (event: KeyboardEvent) => this.onType(event));
     keyboard.on('keydown-ESC', () => this.scene.start('title'));
 
-    // Touch / mouse: tap a ship to fly under it and fire; tap empty space to move there.
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+    // Touch / mouse: tap a ship to fly under it and fire; tap or drag on empty space to move there.
+    const steer = (pointer: Phaser.Input.Pointer) => {
       this.moveTo = Phaser.Math.Clamp(pointer.x, 40, width - 40);
       this.fireAt = null;
+    };
+    this.input.on('pointerdown', steer);
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      // Only a drag that started on the playfield steers, not a slip of the thumb off a key.
+      if (pointer.isDown && pointer.downY < PLAY_HEIGHT && !this.fireAt) steer(pointer);
     });
 
     this.hanzi = await loadHanzi().catch(() => null);
@@ -206,7 +235,7 @@ export class GameScene extends Phaser.Scene {
     this.scoreText.setText(`${this.run.score}`);
     this.waveText.setText(`Wave ${Math.min(this.run.wave + 1, this.run.waveCount)}/${this.run.waveCount}`);
     this.shieldText.setText('◆'.repeat(Math.max(this.run.shields, 0)));
-    this.muteText.setText(isMuted() ? 'Sound off (M)' : 'Sound on (M)');
+    this.muteText.setText((isMuted() ? 'Sound off' : 'Sound on') + (TOUCH ? '' : ' (M)'));
   }
 
   private startWave() {
@@ -289,15 +318,15 @@ export class GameScene extends Phaser.Scene {
     this.promptMissed = false;
     this.typed = '';
     const word = this.target?.word;
-    this.recall = false;
+    this.setRecall(false);
     if (!word) this.setPrompt('', '', '');
     else if (this.toneWave) {
       this.setPrompt('SHOOT THE TONES OF', word.hanzi, word.gloss);
       // Wait for the last hit word's audio to finish before saying the new one.
       this.time.delayedCall(900, () => this.target?.word === word && speak(word.hanzi));
-    } else if (keyboardSeen && progress.isMature(word.hanzi)) {
+    } else if ((keyboardSeen || TOUCH) && progress.isMature(word.hanzi)) {
       // Well-known words move from recognition (shooting) to recall (typing the pinyin).
-      this.recall = true;
+      this.setRecall(true);
       this.setPrompt('TYPE THE PINYIN FOR', word.gloss, '›  _');
     } else {
       this.setPrompt('SHOOT THE WORD FOR', word.gloss, '');
@@ -310,12 +339,60 @@ export class GameScene extends Phaser.Scene {
     this.subText.setText(sub).setColor(COLORS.title);
   }
 
-  /** Typing for recall prompts: letters build the pinyin; a full match locks on to that ship and fires. */
+  private setRecall(recall: boolean) {
+    this.recall = recall;
+    this.keypad?.setVisible(recall);
+    this.touchHint?.setVisible(!recall);
+  }
+
+  /** A QWERTY panel in the band under the playfield, standing in for a physical keyboard. */
+  private createKeypad() {
+    const { width } = this.scale;
+    const top = PLAY_HEIGHT + (KEYPAD_HEIGHT - 3 * KEY_H - 2 * KEY_GAP) / 2;
+    this.touchHint = this.add
+      .text(width / 2, PLAY_HEIGHT + KEYPAD_HEIGHT / 2, 'Tap a ship to shoot it\nDrag to move', {
+        ...textStyle(24, COLORS.muted),
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.6);
+    const keypad = this.add.container(0, 0).setVisible(false);
+    this.keypad = keypad;
+    KEY_ROWS.forEach((letters, row) => {
+      const keys = [...letters].map((key) => ({ key, label: key, w: KEY_W }));
+      if (row === 2) {
+        keys.unshift({ key: 'Backspace', label: '⌫', w: WIDE_KEY_W });
+        keys.push({ key: 'Enter', label: '⏎', w: WIDE_KEY_W });
+      }
+      const rowWidth = keys.reduce((sum, k) => sum + k.w, 0) + (keys.length - 1) * KEY_GAP;
+      let x = (width - rowWidth) / 2;
+      const y = top + row * (KEY_H + KEY_GAP) + KEY_H / 2;
+      for (const { key, label, w } of keys) {
+        const fill = key.length > 1 ? 0x1b2050 : COLORS.enemy;
+        const rect = this.add.rectangle(x + w / 2, y, w, KEY_H, fill).setStrokeStyle(2, COLORS.enemyEdge, 0.5);
+        const text = this.add.text(x + w / 2, y, label, textStyle(32)).setOrigin(0.5);
+        rect.setInteractive().on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
+          e.stopPropagation();
+          rect.setFillStyle(0x3a4290);
+          this.time.delayedCall(90, () => rect.active && rect.setFillStyle(fill));
+          this.typeKey(key);
+        });
+        keypad.add([rect, text]);
+        x += w + KEY_GAP;
+      }
+    });
+  }
+
   private onType(event: KeyboardEvent) {
+    this.typeKey(event.key);
+  }
+
+  /** Typing for recall prompts: letters build the pinyin; a full match locks on to that ship and fires. */
+  private typeKey(key: string) {
     if (!this.recall || !this.active || this.fireAt) return;
-    if (event.key === 'Backspace') this.typed = this.typed.slice(0, -1);
-    else if (event.key === 'Enter') return this.lockOn(true);
-    else if (/^[a-zü]$/i.test(event.key)) this.typed += event.key.toLowerCase();
+    if (key === 'Backspace') this.typed = this.typed.slice(0, -1);
+    else if (key === 'Enter') return this.lockOn(true);
+    else if (/^[a-zü]$/i.test(key)) this.typed += key.toLowerCase();
     else return;
     this.subText.setText(`›  ${this.typed}_`).setColor(COLORS.title);
     this.lockOn(false);

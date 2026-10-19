@@ -2,13 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#05060f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>HSK Invaders</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet" />
     <style>
-      html, body { margin: 0; height: 100%; background: #05060f; }
+      html, body { margin: 0; height: 100%; background: #05060f; overflow: hidden; overscroll-behavior: none; }
+      /* The game owns every touch: no scrolling, pinch or double-tap zoom, text selection or tap flashes. */
+      /* dvh follows the phone's browser bars as they show and hide; the safe-area padding keeps clear of notches. */
+      body {
+        height: 100dvh; box-sizing: border-box;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+      }
       #game { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
     </style>
   </head>

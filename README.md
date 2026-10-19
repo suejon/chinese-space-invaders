@@ -12,11 +12,11 @@ The game borrows from what research says works for learning Chinese (see the pro
 - **Character components.** The first time you hit a word, and whenever you miss one, the game breaks its characters into parts (妈 = 女 woman + 马 sound mǎ).
 - **Tone pairs.** Wave 3 of every sector is a tone wave: ships carry tone patterns (mā má, 1 · 2), the prompt is a two-syllable word, and you shoot its tones. Tap the prompt to hear the word again.
 - **Word memory.** Every answer is saved in the browser. A word you get right comes back after 1 day, then at growing intervals; a miss sends it back to the start.
-- **Typing the pinyin.** Once a word has lasted 7 days, shooting is no longer enough: the prompt asks you to type its pinyin (tones optional). The shot locks on to the ship you typed, so you have to recall the sound, not just recognize the shape. This needs a keyboard; touch-only players keep shooting.
+- **Typing the pinyin.** Once a word has lasted 7 days, shooting is no longer enough: the prompt asks you to type its pinyin (tones optional). The shot locks on to the ship you typed, so you have to recall the sound, not just recognize the shape. On a phone or tablet, on-screen keys appear under the playfield for this.
 - **Daily patrol.** The title screen offers a short run of only the words due for review, across all levels (press P).
 
 - Keyboard: ←/→ or A/D to move, Space to fire, M to mute, Esc to quit. On a "type the pinyin" prompt, type letters to lock on (Enter forces it, Backspace corrects); A, D, M and Space are letters there, so use the arrows to move.
-- Touch or mouse: tap a ship to fly under it and fire; tap elsewhere to move.
+- Touch or mouse: tap a ship to fly under it and fire; tap or drag elsewhere to move. Tap Quit or Sound at the bottom of the screen. On a "type the pinyin" prompt, touch screens show a keyboard under the playfield (V types ü, ⏎ forces the lock-on). The page doesn't scroll or zoom while you play.
 
 ## Develop
 

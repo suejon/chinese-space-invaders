@@ -15,8 +15,15 @@ export const COLORS = {
   bullet: 0xffe27a,
 };
 
+/** Phones and tablets: a finger for a pointer and usually no physical keyboard. */
+export const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+
 export const GAME_WIDTH = 720;
-export const GAME_HEIGHT = 1280;
+/** Height of the playfield and HUD; every scene lays itself out in this. */
+export const PLAY_HEIGHT = 1280;
+/** Touch screens get a band under the playfield for on-screen keys, which also suits tall phone screens. */
+export const KEYPAD_HEIGHT = TOUCH ? 260 : 0;
+export const GAME_HEIGHT = PLAY_HEIGHT + KEYPAD_HEIGHT;
 
 export const textStyle = (size: number, color: string = COLORS.text): Phaser.Types.GameObjects.Text.TextStyle => ({
   fontFamily: CJK_FONT,

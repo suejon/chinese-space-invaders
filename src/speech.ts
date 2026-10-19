@@ -10,6 +10,8 @@ function findVoice() {
 if (typeof speechSynthesis !== 'undefined') {
   findVoice();
   speechSynthesis.addEventListener?.('voiceschanged', findVoice);
+  // Mobile Safari only speaks once a first utterance has come from a tap; later ones are said from game events.
+  window.addEventListener('pointerdown', () => speechSynthesis.speak(new SpeechSynthesisUtterance('')), { once: true });
 }
 
 export function speak(text: string) {
