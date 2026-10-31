@@ -38,6 +38,7 @@ interface Enemy {
   column: number;
   container: Phaser.GameObjects.Container;
   frame: Phaser.GameObjects.Rectangle;
+  label: Phaser.GameObjects.Text;
 }
 
 /**
@@ -236,12 +237,13 @@ export class GameScene extends Phaser.Scene {
       const x = left + (i % COLS) * SPACING_X;
       const y = Math.floor(i / COLS) * SPACING_Y;
       const frame = this.add.rectangle(0, 0, ENEMY_W, ENEMY_H, COLORS.enemy).setStrokeStyle(2, COLORS.enemyEdge);
-      const text = tones ? toneLabel(tonePair(word)!) : word.hanzi;
+      // Tone ships are relabelled with each prompt's own syllables; blank until the first prompt.
+      const text = tones ? '' : word.hanzi;
       const size = tones ? 30 : word.hanzi.length <= 2 ? 44 : word.hanzi.length === 3 ? 36 : 28;
       const label = this.add.text(0, 0, text, { ...textStyle(size), align: 'center', lineSpacing: -4 }).setOrigin(0.5);
       const container = this.add.container(x, y, [frame, label]);
       container.setSize(ENEMY_W, ENEMY_H).setInteractive({ useHandCursor: true });
-      const enemy: Enemy = { word, column: i % COLS, container, frame };
+      const enemy: Enemy = { word, column: i % COLS, container, frame, label };
       container.on('pointerdown', (_p: Phaser.Input.Pointer, _x: number, _y: number, e: Phaser.Types.Input.EventData) => {
         e.stopPropagation();
         // A typed prompt can't be answered by tapping a ship.
@@ -293,6 +295,8 @@ export class GameScene extends Phaser.Scene {
     if (!word) this.setPrompt('', '', '');
     else if (this.toneWave) {
       this.setPrompt('SHOOT THE TONES OF', word.hanzi, word.gloss);
+      // Every ship shows the prompt word's own syllables, each in that ship's tone pattern.
+      for (const enemy of this.enemies) this.setToneLabel(enemy, word.pinyin);
       // Wait for the last hit word's audio to finish before saying the new one.
       this.time.delayedCall(900, () => this.target?.word === word && speak(word.hanzi));
     } else if (keyboardSeen && progress.isMature(word.hanzi)) {
@@ -302,6 +306,13 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.setPrompt('SHOOT THE WORD FOR', word.gloss, '');
     }
+  }
+
+  /** Label a tone ship with `pinyin` in its tone pattern, shrinking long syllables to fit the ship. */
+  private setToneLabel(enemy: Enemy, pinyin: string) {
+    enemy.label.setText(toneLabel(tonePair(enemy.word)!, pinyin)).setFontSize(30);
+    const fit = (ENEMY_W - 12) / enemy.label.width;
+    if (fit < 1) enemy.label.setFontSize(Math.floor(30 * fit));
   }
 
   private setPrompt(header: string, prompt: string, sub: string) {
