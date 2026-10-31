@@ -3,7 +3,7 @@ import { levelName, loadIndex } from '../data';
 import { progress } from '../game/progress';
 import { COLORS, textStyle } from '../theme';
 
-/** Level select. Tap a level, or press 1–7. P starts the daily patrol of due reviews. */
+/** Level select. Tap a level, or press 1–7. P starts the daily patrol of due reviews; S opens progress stats. */
 export class TitleScene extends Phaser.Scene {
   constructor() {
     super('title');
@@ -16,6 +16,18 @@ export class TitleScene extends Phaser.Scene {
     this.add
       .text(width / 2, 330, 'Shoot the ship whose word matches the meaning.', textStyle(24, COLORS.muted))
       .setOrigin(0.5);
+
+    // Learning progress screen.
+    const stats = () => this.scene.start('stats');
+    const statsButton = this.add
+      .rectangle(width - 24, 40, 170, 60, COLORS.enemy)
+      .setOrigin(1, 0)
+      .setStrokeStyle(2, COLORS.enemyEdge)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', stats);
+    statsButton.on('pointerover', () => statsButton.setFillStyle(0x3a4290));
+    statsButton.on('pointerout', () => statsButton.setFillStyle(COLORS.enemy));
+    this.add.text(width - 24 - 85, 70, 'Progress', textStyle(26, COLORS.title)).setOrigin(0.5);
 
     const levels = await loadIndex();
     const start = (level: number) => this.scene.start('game', { level });
@@ -58,6 +70,7 @@ export class TitleScene extends Phaser.Scene {
       const level = Number(event.key);
       if (levels.some((l) => l.level === level)) start(level);
       if (event.key.toLowerCase() === 'p') patrol();
+      if (event.key.toLowerCase() === 's') stats();
     });
   }
 }

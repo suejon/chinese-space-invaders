@@ -38,12 +38,12 @@ export function schedule(record: WordRecord | undefined, level: number, review: 
   return { ...prev, level, interval, due: now + interval * DAY, reps: prev.reps + 1 };
 }
 
-interface Storage {
+export interface Storage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
 }
 
-function browserStorage(): Storage | undefined {
+export function browserStorage(): Storage | undefined {
   try {
     return typeof localStorage === 'undefined' ? undefined : localStorage;
   } catch {
@@ -79,6 +79,11 @@ export class Progress {
   review(hanzi: string, level: number, review: Review, now = Date.now()) {
     this.records.set(hanzi, schedule(this.records.get(hanzi), level, review, now));
     this.save();
+  }
+
+  /** Every word seen so far, for the stats screen. */
+  entries(): [string, WordRecord][] {
+    return [...this.records];
   }
 
   /** Words due for review, most overdue first. */

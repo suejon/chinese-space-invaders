@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GameScene } from './scenes/GameScene';
 import { ResultsScene } from './scenes/ResultsScene';
+import { StatsScene } from './scenes/StatsScene';
 import { TitleScene } from './scenes/TitleScene';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH } from './theme';
 
@@ -12,7 +13,7 @@ const game = new Phaser.Game({
   parent: 'game',
   backgroundColor: COLORS.background,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, width: GAME_WIDTH, height: GAME_HEIGHT },
-  scene: [TitleScene, GameScene, ResultsScene],
+  scene: [TitleScene, GameScene, ResultsScene, StatsScene],
 });
 
 // Handy for poking at scenes from the browser console during development.
