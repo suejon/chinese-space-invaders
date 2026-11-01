@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Word } from '../data';
 import { seededRng } from './random';
-import { pickToneWave, sandhiNote, toneLabel, toneless, tonePair, tonesOf } from './tones';
+import { pickToneWave, sandhiNote, toneLabel, toneless, tonePair, tonesOf, withTone } from './tones';
 
 const word = (hanzi: string, pinyin: string): Word => ({ hanzi, trad: hanzi, pinyin, gloss: hanzi, meanings: [], pos: [], freq: 0 });
 
@@ -18,9 +18,20 @@ describe('tones', () => {
     expect(tonePair(word('一点儿', 'yī diǎn r'))).toBeNull();
   });
 
-  it('labels patterns on a dummy syllable and notes 3-3 sandhi', () => {
-    expect(toneLabel('1-5')).toBe('mā ma\n1 · 0');
-    expect(toneLabel('4-2')).toBe('mà má\n4 · 2');
+  it('puts tones on the right vowel', () => {
+    expect(withTone('huān', 3)).toBe('huǎn');
+    expect(withTone('xǐ', 1)).toBe('xī');
+    expect(withTone('gou', 3)).toBe('gǒu');
+    expect(withTone('duì', 2)).toBe('duí');
+    expect(withTone('liú', 4)).toBe('liù');
+    expect(withTone('nǚ', 2)).toBe('nǘ');
+    expect(withTone('xué', 5)).toBe('xue');
+  });
+
+  it("labels patterns on the tested word's syllables and notes 3-3 sandhi", () => {
+    expect(toneLabel('1-5', 'xǐ huan')).toBe('xī huan\n1 · 0');
+    expect(toneLabel('3-5', 'xǐ huan')).toBe('xǐ huan\n3 · 0');
+    expect(toneLabel('4-2', 'lǎo shī')).toBe('lào shí\n4 · 2');
     expect(sandhiNote('3-3')).not.toBeNull();
     expect(sandhiNote('3-4')).toBeNull();
   });
