@@ -3,6 +3,7 @@ import { levelName, loadHanzi, loadLevel, type Word } from '../data';
 import { describeParts, type HanziData } from '../game/parts';
 import { progress } from '../game/progress';
 import { shuffle } from '../game/random';
+import { history } from '../game/stats';
 import { PATROL_MAX, patrolWaves, RunState } from '../game/run';
 import { pickToneWave, sandhiNote, toneLabel, toneless, tonePair } from '../game/tones';
 import { pickWave } from '../game/wave';
@@ -463,6 +464,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private record(word: Word, correct: boolean) {
+    history.answer(correct, progress.isNew(word.hanzi));
     progress.review(word.hanzi, this.levelOf.get(word.hanzi) ?? this.run.level, { correct, recall: this.recall });
   }
 

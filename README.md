@@ -14,6 +14,7 @@ The game borrows from what research says works for learning Chinese (see the pro
 - **Word memory.** Every answer is saved in the browser. A word you get right comes back after 1 day, then at growing intervals; a miss sends it back to the start.
 - **Typing the pinyin.** Once a word has lasted 7 days, shooting is no longer enough: the prompt asks you to type its pinyin (tones optional). The shot locks on to the ship you typed, so you have to recall the sound, not just recognize the shape. This needs a keyboard; touch-only players keep shooting.
 - **Daily patrol.** The title screen offers a short run of only the words due for review, across all levels (press P).
+- **Progress stats.** The Progress button on the title screen (or S) shows words seen and mastered overall and per HSK level, accuracy and answers for the last 14 days, a day streak, and the words missed most. Everything is stored in the browser; there is no account.
 
 - Keyboard: ←/→ or A/D to move, Space to fire, M to mute, Esc to quit. On a "type the pinyin" prompt, type letters to lock on (Enter forces it, Backspace corrects); A, D, M and Space are letters there, so use the arrows to move.
 - Touch or mouse: tap a ship to fly under it and fire; tap elsewhere to move.
