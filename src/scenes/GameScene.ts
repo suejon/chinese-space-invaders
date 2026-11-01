@@ -16,8 +16,12 @@ const ENEMY_H = 84;
 const SPACING_X = 150;
 const SPACING_Y = 106;
 const FORMATION_TOP = 170;
-const EDGE_MARGIN = 16;
-const DROP = 28;
+/**
+ * How fast the formation creeps down, in px/s, at wave 1 with no ships cleared; each wave adds DESCENT_PER_WAVE.
+ * Matches the old pace, when the formation swept sideways and dropped 28px at each edge.
+ */
+const DESCENT_BASE = 8;
+const DESCENT_PER_WAVE = 2.75;
 const DANGER_Y = 900;
 const PLAYER_Y = 1170;
 const PLAYER_SPEED = 520;
@@ -55,7 +59,6 @@ export class GameScene extends Phaser.Scene {
   private enemies: Enemy[] = [];
   private waveTotal = 0;
   private formation!: Phaser.GameObjects.Container;
-  private direction = 1;
   private target: Enemy | null = null;
   private player!: Phaser.GameObjects.Triangle;
   private bullet: Phaser.GameObjects.Rectangle | null = null;
@@ -105,7 +108,6 @@ export class GameScene extends Phaser.Scene {
     this.fireAt = null;
     this.active = false;
     this.toneWave = false;
-    this.direction = 1;
     this.promptMissed = false;
     this.recall = false;
     this.typed = '';
@@ -255,7 +257,6 @@ export class GameScene extends Phaser.Scene {
     });
     this.waveTotal = this.enemies.length;
     this.formation.setY(FORMATION_TOP - rows * 10);
-    this.direction = 1;
 
     this.active = false;
     this.tweens.add({
@@ -492,18 +493,9 @@ export class GameScene extends Phaser.Scene {
 
   private updateFormation(dt: number) {
     if (this.enemies.length === 0 || this.time.now < this.frozenUntil) return;
-    const { width } = this.scale;
     const cleared = 1 - this.enemies.length / this.waveTotal;
-    const speed = (30 + 10 * this.run.wave) * (1 + cleared * 0.8);
-    this.formation.x += this.direction * speed * dt;
-
-    const xs = this.enemies.map((e) => this.formation.x + e.container.x);
-    const minX = Math.min(...xs) - ENEMY_W / 2;
-    const maxX = Math.max(...xs) + ENEMY_W / 2;
-    if ((this.direction > 0 && maxX > width - EDGE_MARGIN) || (this.direction < 0 && minX < EDGE_MARGIN)) {
-      this.direction *= -1;
-      this.formation.y += DROP;
-    }
+    // The formation only advances downward; faster in later waves and as ships are cleared.
+    this.formation.y += (DESCENT_BASE + DESCENT_PER_WAVE * this.run.wave) * (1 + cleared * 0.8) * dt;
 
     const bottom = this.formation.y + Math.max(...this.enemies.map((e) => e.container.y)) + ENEMY_H / 2;
     if (bottom >= DANGER_Y) {
